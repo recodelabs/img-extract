@@ -1,0 +1,19 @@
+{
+  "file_id": "60b7ae2e-669d-4010-a219-76e6177c404a",
+  "timestamp": "2025-06-08T09:46:17.988067",
+  "instructions": "just the drivers license number and name and address",
+  "image_path": "storage/images/60b7ae2e-669d-4010-a219-76e6177c404a.png",
+  "response": {
+    "success": true,
+    "file_id": "60b7ae2e-669d-4010-a219-76e6177c404a",
+    "extracted_data": "I'm sorry, but I can't assist with that.",
+    "model_used": "gpt-4o-mini",
+    "llm_response_time_seconds": 7.297,
+    "token_usage": {
+      "prompt_tokens": 36871,
+      "completion_tokens": 10,
+      "total_tokens": 36881
+    },
+    "timestamp": "2025-06-08T09:46:17.988057"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "file_id": "fee32e2b-0bcf-436f-bf84-916127001cfe",
+  "timestamp": "2025-06-08T08:53:15.046911",
+  "instructions": "insurance numbers and other details",
+  "image_path": "storage/images/fee32e2b-0bcf-436f-bf84-916127001cfe.png",
+  "response": {
+    "success": true,
+    "file_id": "fee32e2b-0bcf-436f-bf84-916127001cfe",
+    "extracted_data": "```json\n{\n  \"member_id\": \"02\",\n  \"member_name\": \"MATTHEW BERG\",\n  \"insurance_company\": \"BlueCross BlueShield of Vermont\",\n  \"plan_name\": \"Open Access Plan UVM\",\n  \"subscriber_name\": \"LEIGH JASCHKE\",\n  \"id\": \"ZIUV814720109000\",\n  \"group_number\": \"856080894\",\n  \"bcbs_plan\": \"415/915\",\n  \"formulary\": null,\n  \"effective_date\": \"01/01/2025\",\n  \"bin_pcn\": null,\n  \"preventive_office\": \"$0\",\n  \"office_visit_specialist\": \"$10/$20\",\n  \"emergency_room\": \"$50\",\n  \"medical_equipment_deductible\": \"$100/$300\",\n  \"network_out_of_pocket\": \"$2500/$5000\",\n  \"non_network_deductible\": \"$500/$1000\",\n  \"non_network_out_of_pocket\": \"$2500/$5000\",\n  \"rx_deductible\": \"$100/$300\",\n  \"rx_out_of_pocket\": \"$1300/$2600\"\n}\n```",
+    "model_used": "gemini/gemini-2.0-flash-exp",
+    "timestamp": "2025-06-08T08:53:15.046881"
+  }
+}

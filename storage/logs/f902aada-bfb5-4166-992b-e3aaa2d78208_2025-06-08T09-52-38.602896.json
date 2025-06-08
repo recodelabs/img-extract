@@ -1,0 +1,19 @@
+{
+  "file_id": "f902aada-bfb5-4166-992b-e3aaa2d78208",
+  "timestamp": "2025-06-08T09:52:38.602896",
+  "instructions": "just the drivers license number and name and address",
+  "image_path": "storage/images/f902aada-bfb5-4166-992b-e3aaa2d78208.png",
+  "response": {
+    "success": true,
+    "file_id": "f902aada-bfb5-4166-992b-e3aaa2d78208",
+    "extracted_data": "```json\n{\n  \"license_number\": \"83132540\",\n  \"name\": \"BERG MATTHEW\",\n  \"address\": \"46 BREWER PARKWAY SOUTH BURLINGTON, VT 05403\"\n}\n```",
+    "model_used": "gemini/gemini-2.0-flash-001",
+    "llm_response_time_seconds": 5.118,
+    "token_usage": {
+      "prompt_tokens": 1835,
+      "completion_tokens": 60,
+      "total_tokens": 1895
+    },
+    "timestamp": "2025-06-08T09:52:38.602890"
+  }
+}

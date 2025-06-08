@@ -1,0 +1,19 @@
+{
+  "file_id": "929d1ab4-01ce-40cc-a1e2-469c06dc0806",
+  "timestamp": "2025-06-08T09:41:58.447626",
+  "instructions": "just the drivers license numbera",
+  "image_path": "storage/images/929d1ab4-01ce-40cc-a1e2-469c06dc0806.png",
+  "response": {
+    "success": true,
+    "file_id": "929d1ab4-01ce-40cc-a1e2-469c06dc0806",
+    "extracted_data": "```json\n{\n  \"license_number\": \"83132540\"\n}\n```",
+    "model_used": "gemini/gemini-2.0-flash-001",
+    "llm_response_time_seconds": 5.932,
+    "token_usage": {
+      "prompt_tokens": 1832,
+      "completion_tokens": 25,
+      "total_tokens": 1857
+    },
+    "timestamp": "2025-06-08T09:41:58.447594"
+  }
+}
