@@ -9,3 +9,4 @@ aiofiles==23.2.1
 python-dotenv==0.21.0
 setuptools
 gunicorn
+httpx

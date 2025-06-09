@@ -15,6 +15,7 @@ from fastapi.responses import JSONResponse
 import litellm
 from PIL import Image
 import aiofiles
+import httpx
 
 load_dotenv()
 
@@ -64,13 +65,69 @@ async def log_request_response(file_id: str, instructions: str, response: dict, 
 
 @app.post("/extract")
 async def extract_data_from_image(
-    file: UploadFile = File(...),
     instructions: str = Form(...),
-    model: Optional[str] = Form("gemini-2.0-flash-exp")
+    model: Optional[str] = Form("gemini-2.0-flash-exp"),
+    file: Optional[UploadFile] = File(None),
+    file_url: Optional[str] = Form(None),
 ):
     file_id = str(uuid.uuid4())
-    
-    content = await file.read()
+    content = None
+    filename = "image.jpg"  # Default filename
+
+    if file and file_url:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "success": False,
+                "error": "Please provide either a file or a file_url, not both.",
+            },
+        )
+
+    if not file and not file_url:
+        return JSONResponse(
+            status_code=400,
+            content={"success": False, "error": "Please provide a file or a file_url."},
+        )
+
+    if file:
+        content = await file.read()
+        if file.filename:
+            filename = file.filename
+    elif file_url:
+        try:
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+            }
+            async with httpx.AsyncClient() as client:
+                response = await client.get(file_url, headers=headers)
+                response.raise_for_status()
+                content = await response.aread()
+                # Try to get filename from URL
+                parsed_url = httpx.URL(file_url)
+                if parsed_url.path:
+                    path_part = parsed_url.path.split("/")[-1]
+                    if path_part:
+                        filename = path_part
+
+        except httpx.HTTPStatusError as e:
+            error_response = {
+                "success": False,
+                "error": f"Failed to fetch image from URL: {e.response.status_code} {e.response.reason_phrase}",
+                "file_id": file_id,
+                "timestamp": datetime.now().isoformat(),
+            }
+            await log_request_response(file_id, instructions, error_response, "")
+            return JSONResponse(content=error_response, status_code=400)
+        except Exception as e:
+            error_response = {
+                "success": False,
+                "error": f"An error occurred while fetching the image from URL: {str(e)}",
+                "file_id": file_id,
+                "timestamp": datetime.now().isoformat(),
+            }
+            await log_request_response(file_id, instructions, error_response, "")
+            return JSONResponse(content=error_response, status_code=400)
+
     if not content:
         error_response = {
             "success": False,
@@ -96,7 +153,7 @@ async def extract_data_from_image(
         return JSONResponse(content=error_response, status_code=400)
     
     try:
-        image_path = await save_image_content(content, file.filename, file_id)
+        image_path = await save_image_content(content, filename, file_id)
         
         base64_image = base64.b64encode(content).decode('utf-8')
         
