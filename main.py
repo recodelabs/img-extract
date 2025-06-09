@@ -64,133 +64,13 @@ async def log_request_response(file_id: str, instructions: str, response: dict, 
     async with aiofiles.open(log_path, 'w') as f:
         await f.write(json.dumps(log_data, indent=2))
 
-class JsonExtractRequest(BaseModel):
-    instructions: str
-    file_url: str
-    model: Optional[str] = "gemini-2.0-flash-exp"
-
-@app.post("/extract")
-async def extract_data_from_image(request: Request):
-    file_id = str(uuid.uuid4())
-    content = None
-    filename = "image.jpg"  # Default filename
-
-    file: Optional[UploadFile] = None
-    file_url: Optional[str] = None
-    instructions: Optional[str] = None
-    model: str = "gemini-2.0-flash-exp"
-
-    content_type = request.headers.get("content-type", "")
-
-    if "application/json" in content_type:
-        try:
-            body = await request.json()
-            req_data = JsonExtractRequest(**body)
-            instructions = req_data.instructions
-            file_url = req_data.file_url
-            model = req_data.model
-        except ValidationError as e:
-            return JSONResponse(
-                status_code=422,
-                content={"success": False, "error": f"Invalid JSON body: {e.errors()}"},
-            )
-        except json.JSONDecodeError:
-            return JSONResponse(
-                status_code=400, content={"success": False, "error": "Invalid JSON provided."}
-            )
-
-    elif "multipart/form-data" in content_type:
-        form = await request.form()
-        instructions = form.get("instructions")
-        model = form.get("model", "gemini-2.0-flash-exp")
-        file_from_form = form.get("file")
-        if isinstance(file_from_form, UploadFile):
-            file = file_from_form
-        file_url = form.get("file_url")
-
-    else:
-        return JSONResponse(
-            status_code=415,
-            content={
-                "success": False,
-                "error": "Unsupported Content-Type. Please use 'application/json' or 'multipart/form-data'.",
-            },
-        )
-    
-    if not instructions:
-        return JSONResponse(
-            status_code=400,
-            content={
-                "success": False,
-                "error": "The 'instructions' field is required.",
-            },
-        )
-
-    if file and file_url:
-        return JSONResponse(
-            status_code=400,
-            content={
-                "success": False,
-                "error": "Please provide either a file or a file_url, not both.",
-            },
-        )
-
-    if not file and not file_url:
-        return JSONResponse(
-            status_code=400,
-            content={"success": False, "error": "Please provide a file or a file_url."},
-        )
-
-    if file:
-        content = await file.read()
-        if file.filename:
-            filename = file.filename
-    elif file_url:
-        try:
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-            }
-            async with httpx.AsyncClient() as client:
-                response = await client.get(file_url, headers=headers)
-                response.raise_for_status()
-                content = await response.aread()
-                # Try to get filename from URL
-                parsed_url = httpx.URL(file_url)
-                if parsed_url.path:
-                    path_part = parsed_url.path.split("/")[-1]
-                    if path_part:
-                        filename = path_part
-
-        except httpx.HTTPStatusError as e:
-            error_response = {
-                "success": False,
-                "error": f"Failed to fetch image from URL: {e.response.status_code} {e.response.reason_phrase}",
-                "file_id": file_id,
-                "timestamp": datetime.now().isoformat(),
-            }
-            await log_request_response(file_id, instructions, error_response, "")
-            return JSONResponse(content=error_response, status_code=400)
-        except Exception as e:
-            error_response = {
-                "success": False,
-                "error": f"An error occurred while fetching the image from URL: {str(e)}",
-                "file_id": file_id,
-                "timestamp": datetime.now().isoformat(),
-            }
-            await log_request_response(file_id, instructions, error_response, "")
-            return JSONResponse(content=error_response, status_code=400)
-
-    if not content:
-        error_response = {
-            "success": False,
-            "error": "The uploaded file is empty or could not be fetched.",
-            "file_id": file_id,
-            "model_used": model,
-            "timestamp": datetime.now().isoformat()
-        }
-        await log_request_response(file_id, instructions, error_response, "")
-        return JSONResponse(content=error_response, status_code=400)
-
+async def process_image_and_extract_data(
+    content: bytes,
+    filename: str,
+    file_id: str,
+    instructions: str,
+    model: str
+):
     try:
         Image.open(io.BytesIO(content))
     except Exception:
@@ -202,7 +82,7 @@ async def extract_data_from_image(request: Request):
             "timestamp": datetime.now().isoformat()
         }
         await log_request_response(file_id, instructions, error_response, "")
-        return JSONResponse(content=error_response, status_code=400)
+        raise HTTPException(status_code=400, detail=error_response)
     
     try:
         image_path = await save_image_content(content, filename, file_id)
@@ -240,7 +120,6 @@ async def extract_data_from_image(request: Request):
         
         extracted_data = response.choices[0].message.content
         
-        # Extract token usage from response
         prompt_tokens = response.usage.prompt_tokens if response.usage else 0
         completion_tokens = response.usage.completion_tokens if response.usage else 0
         total_tokens = response.usage.total_tokens if response.usage else 0
@@ -272,7 +151,92 @@ async def extract_data_from_image(request: Request):
             "timestamp": datetime.now().isoformat()
         }
         await log_request_response(file_id, instructions, error_response, image_path if 'image_path' in locals() else "")
-        return JSONResponse(content=error_response, status_code=500)
+        raise HTTPException(status_code=500, detail=error_response)
+
+class JsonExtractRequest(BaseModel):
+    instructions: str
+    file_url: str
+    model: Optional[str] = "gemini-2.0-flash-exp"
+
+@app.post("/extract/url")
+async def extract_data_from_url(req_data: JsonExtractRequest):
+    file_id = str(uuid.uuid4())
+    filename = "image.jpg"  # Default filename
+
+    instructions = req_data.instructions
+    file_url = req_data.file_url
+    model = req_data.model
+    content = None
+
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+        }
+        async with httpx.AsyncClient() as client:
+            response = await client.get(file_url, headers=headers)
+            response.raise_for_status()
+            content = await response.aread()
+            parsed_url = httpx.URL(file_url)
+            if parsed_url.path:
+                path_part = parsed_url.path.split("/")[-1]
+                if path_part:
+                    filename = path_part
+
+    except httpx.HTTPStatusError as e:
+        error_response = {
+            "success": False,
+            "error": f"Failed to fetch image from URL: {e.response.status_code} {e.response.reason_phrase}",
+            "file_id": file_id,
+            "timestamp": datetime.now().isoformat(),
+        }
+        await log_request_response(file_id, instructions, error_response, "")
+        raise HTTPException(status_code=400, detail=error_response)
+    except Exception as e:
+        error_response = {
+            "success": False,
+            "error": f"An error occurred while fetching the image from URL: {str(e)}",
+            "file_id": file_id,
+            "timestamp": datetime.now().isoformat(),
+        }
+        await log_request_response(file_id, instructions, error_response, "")
+        raise HTTPException(status_code=500, detail=error_response)
+
+    if not content:
+        error_response = {
+            "success": False,
+            "error": "The fetched content is empty.",
+            "file_id": file_id,
+            "model_used": model,
+            "timestamp": datetime.now().isoformat()
+        }
+        await log_request_response(file_id, instructions, error_response, "")
+        raise HTTPException(status_code=400, detail=error_response)
+
+    return await process_image_and_extract_data(content, filename, file_id, instructions, model)
+
+@app.post("/extract/upload")
+async def extract_data_from_upload(
+    instructions: str = Form(...),
+    model: str = Form("gemini-2.0-flash-exp"),
+    file: UploadFile = File(...)
+):
+    file_id = str(uuid.uuid4())
+    content = await file.read()
+    filename = file.filename if file.filename else "image.jpg"
+
+    if not content:
+        error_response = {
+            "success": False,
+            "error": "The uploaded file is empty.",
+            "file_id": file_id,
+            "model_used": model,
+            "timestamp": datetime.now().isoformat()
+        }
+        await log_request_response(file_id, instructions, error_response, "")
+        raise HTTPException(status_code=400, detail=error_response)
+
+    return await process_image_and_extract_data(content, filename, file_id, instructions, model)
+
 
 @app.get("/health")
 async def health_check():
@@ -284,7 +248,8 @@ async def root():
         "message": "Image Data Extraction API",
         "version": "1.0.0",
         "endpoints": {
-            "POST /extract": "Extract data from image using LLM",
+            "POST /extract/url": "Extract data from image URL (application/json)",
+            "POST /extract/upload": "Extract data from uploaded image (multipart/form-data)",
             "GET /health": "Health check",
             "GET /": "API information"
         }
