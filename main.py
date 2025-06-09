@@ -246,7 +246,7 @@ async def health_check():
 async def root():
     return {
         "message": "Image Data Extraction API",
-        "version": "1.0.0",
+        "version": "1.0.1",
         "endpoints": {
             "POST /extract/url": "Extract data from image URL (application/json)",
             "POST /extract/upload": "Extract data from uploaded image (multipart/form-data)",
