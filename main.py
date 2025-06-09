@@ -7,12 +7,16 @@ import time
 from datetime import datetime
 from typing import Optional
 from pathlib import Path
+from contextlib import asynccontextmanager
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException
 from fastapi.responses import JSONResponse
 import litellm
 from PIL import Image
 import aiofiles
+
+load_dotenv()
 
 app = FastAPI(title="Image Data Extraction API", version="1.0.0")
 
@@ -20,12 +24,15 @@ STORAGE_DIR = Path("storage")
 IMAGES_DIR = STORAGE_DIR / "images"
 LOGS_DIR = STORAGE_DIR / "logs"
 
-@app.on_event("startup")
-async def startup_event():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     IMAGES_DIR.mkdir(parents=True, exist_ok=True)
     LOGS_DIR.mkdir(parents=True, exist_ok=True)
+    yield
 
-os.environ["GEMINI_API_KEY"] = os.getenv("GEMINI_API_KEY", "")
+app = FastAPI(
+    title="Image Data Extraction API", version="1.0.0", lifespan=lifespan
+)
 
 litellm.set_verbose = False
 
@@ -59,7 +66,7 @@ async def log_request_response(file_id: str, instructions: str, response: dict, 
 async def extract_data_from_image(
     file: UploadFile = File(...),
     instructions: str = Form(...),
-    model: Optional[str] = Form("gemini/gemini-2.0-flash-001")
+    model: Optional[str] = Form("gemini-2.0-flash-exp")
 ):
     file_id = str(uuid.uuid4())
     
@@ -69,6 +76,7 @@ async def extract_data_from_image(
             "success": False,
             "error": "The uploaded file is empty.",
             "file_id": file_id,
+            "model_used": model,
             "timestamp": datetime.now().isoformat()
         }
         await log_request_response(file_id, instructions, error_response, "")
@@ -81,6 +89,7 @@ async def extract_data_from_image(
             "success": False,
             "error": "The provided file is not a valid image.",
             "file_id": file_id,
+            "model_used": model,
             "timestamp": datetime.now().isoformat()
         }
         await log_request_response(file_id, instructions, error_response, "")
@@ -116,6 +125,7 @@ async def extract_data_from_image(
             max_tokens=1000,
             temperature=0.1
         )
+
         llm_end_time = time.time()
         llm_response_time = llm_end_time - llm_start_time
         
@@ -149,6 +159,7 @@ async def extract_data_from_image(
             "success": False,
             "error": str(e),
             "file_id": file_id,
+            "model_used": model,
             "timestamp": datetime.now().isoformat()
         }
         await log_request_response(file_id, instructions, error_response, image_path if 'image_path' in locals() else "")
