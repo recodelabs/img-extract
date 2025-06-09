@@ -9,8 +9,9 @@ from typing import Optional
 from pathlib import Path
 from contextlib import asynccontextmanager
 
+from pydantic import BaseModel, ValidationError
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, UploadFile, Form, HTTPException
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Request
 from fastapi.responses import JSONResponse
 import litellm
 from PIL import Image
@@ -63,16 +64,67 @@ async def log_request_response(file_id: str, instructions: str, response: dict, 
     async with aiofiles.open(log_path, 'w') as f:
         await f.write(json.dumps(log_data, indent=2))
 
+class JsonExtractRequest(BaseModel):
+    instructions: str
+    file_url: str
+    model: Optional[str] = "gemini-2.0-flash-exp"
+
 @app.post("/extract")
-async def extract_data_from_image(
-    instructions: str = Form(...),
-    model: Optional[str] = Form("gemini-2.0-flash-exp"),
-    file: Optional[UploadFile] = File(None),
-    file_url: Optional[str] = Form(None),
-):
+async def extract_data_from_image(request: Request):
     file_id = str(uuid.uuid4())
     content = None
     filename = "image.jpg"  # Default filename
+
+    file: Optional[UploadFile] = None
+    file_url: Optional[str] = None
+    instructions: Optional[str] = None
+    model: str = "gemini-2.0-flash-exp"
+
+    content_type = request.headers.get("content-type", "")
+
+    if "application/json" in content_type:
+        try:
+            body = await request.json()
+            req_data = JsonExtractRequest(**body)
+            instructions = req_data.instructions
+            file_url = req_data.file_url
+            model = req_data.model
+        except ValidationError as e:
+            return JSONResponse(
+                status_code=422,
+                content={"success": False, "error": f"Invalid JSON body: {e.errors()}"},
+            )
+        except json.JSONDecodeError:
+            return JSONResponse(
+                status_code=400, content={"success": False, "error": "Invalid JSON provided."}
+            )
+
+    elif "multipart/form-data" in content_type:
+        form = await request.form()
+        instructions = form.get("instructions")
+        model = form.get("model", "gemini-2.0-flash-exp")
+        file_from_form = form.get("file")
+        if isinstance(file_from_form, UploadFile):
+            file = file_from_form
+        file_url = form.get("file_url")
+
+    else:
+        return JSONResponse(
+            status_code=415,
+            content={
+                "success": False,
+                "error": "Unsupported Content-Type. Please use 'application/json' or 'multipart/form-data'.",
+            },
+        )
+    
+    if not instructions:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "success": False,
+                "error": "The 'instructions' field is required.",
+            },
+        )
 
     if file and file_url:
         return JSONResponse(
@@ -131,7 +183,7 @@ async def extract_data_from_image(
     if not content:
         error_response = {
             "success": False,
-            "error": "The uploaded file is empty.",
+            "error": "The uploaded file is empty or could not be fetched.",
             "file_id": file_id,
             "model_used": model,
             "timestamp": datetime.now().isoformat()
