@@ -118,7 +118,32 @@ async def process_image_and_extract_data(
         llm_end_time = time.time()
         llm_response_time = llm_end_time - llm_start_time
         
-        extracted_data = response.choices[0].message.content
+        raw_content = response.choices[0].message.content
+        
+        # Clean up the LLM response - remove markdown formatting and extract JSON
+        extracted_data = raw_content
+        if raw_content.strip().startswith('```'):
+            # Remove markdown code blocks
+            lines = raw_content.strip().split('\n')
+            # Find the actual JSON content (skip ```json and ```)
+            json_lines = []
+            in_code_block = False
+            for line in lines:
+                if line.strip().startswith('```'):
+                    in_code_block = not in_code_block
+                    continue
+                if in_code_block:
+                    json_lines.append(line)
+            extracted_data = '\n'.join(json_lines).strip()
+        
+        # Try to parse JSON and return as object instead of string
+        try:
+            import json as json_module
+            parsed_json = json_module.loads(extracted_data)
+            extracted_data = parsed_json  # Return as object, not string
+        except:
+            # If parsing fails, just clean up newlines and extra whitespace
+            extracted_data = extracted_data.replace('\\n', '').strip()
         
         prompt_tokens = response.usage.prompt_tokens if response.usage else 0
         completion_tokens = response.usage.completion_tokens if response.usage else 0
